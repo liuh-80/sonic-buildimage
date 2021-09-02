@@ -6,3 +6,8 @@ nsm/*
 pam/*
 !pam/Makefile
 !pam/*.patch
+!bash/
+!bash/*.c
+!bash/*.in
+!bash/*.ac
+!bash/*.am
