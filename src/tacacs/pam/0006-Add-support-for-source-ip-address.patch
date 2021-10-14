@@ -69,12 +69,12 @@ index 8f42a0c..164df62 100644
 +/* set source ip address for the outgoing tacacs packets */
 +void set_source_ip(const char *tac_source_ip) {
 +    /*
-+    	addrinfo created by getaddrinfo must be released with freeaddrinfo.
-+    	so source ip address will be stored in following static variables.
++        addrinfo created by getaddrinfo must be released with freeaddrinfo.
++        so source ip address will be stored in following static variables.
 +    */
-+	static struct addrinfo tac_source_address;
-+	static struct sockaddr tac_source_sock_addr;
-+	static struct sockaddr_in6 tac_source_sock6_addr;
++    static struct addrinfo tac_source_address;
++    static struct sockaddr tac_source_sock_addr;
++    static struct sockaddr_in6 tac_source_sock6_addr;
 +
 +    struct addrinfo hints, *source_address;
 +    int rv;
