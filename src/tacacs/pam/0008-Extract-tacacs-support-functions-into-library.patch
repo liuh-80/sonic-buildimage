@@ -279,7 +279,7 @@ index e22fa31..5b6e1fa 100644
 +    while (fgets(line_buffer, sizeof line_buffer, config_file)) {
 +        if(*line_buffer == '#' || isspace(*line_buffer))
 +            continue; /* skip comments and blank line. */
-+        strtok(line_buffer, " \t\n\r\f");
++        strtok(line_buffer, " ,\t\n\r\f");
 +        ctrl |= _pam_parse_arg(line_buffer, current_secret, sizeof(current_secret));
 +    }
 +

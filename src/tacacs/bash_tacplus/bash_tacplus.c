@@ -1,13 +1,26 @@
+#include <errno.h>
+#include <limits.h>
+#include <pwd.h>
+#include <stdarg.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
-#include <time.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
 #include <syslog.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+/* Remote user gecos prefix, which been assigned by nss_tacplus */
+#define REMOTE_USER_GECOS_PREFIX      "remote_user"
+
+/* Default value for _SC_GETPW_R_SIZE_MAX */
+#define DEFAULT_SC_GETPW_R_SIZE_MAX     1024
+
+/* Return value for is_local_user method */
+#define IS_LOCAL_USER              0
+#define IS_REMOTE_USER             1
+#define ERROR_CHECK_LOCAL_USER     2
 
 /* Tacacs+ lib */
 #include <libtac/libtac.h>
@@ -32,7 +45,8 @@
     va_end(args);
 
 /* Config file path */
-const char *tacacs_config_file = "/etc/tacplus_servers";
+const char *tacacs_config_file = "/etc/tacplus_nss.conf";
+
 
 /* Config file attribute */
 struct stat config_file_attr;
@@ -51,10 +65,14 @@ int tacacs_ctrl;
  */
 void output_verbose(const char *format, ...)
 {
+    /*
     syslog(LOG_INFO,"TACACS+: ");
 
     GENERATE_LOG_FROM_VA(logBuffer);
     syslog(LOG_INFO, "%s", logBuffer);
+    */
+    GENERATE_LOG_FROM_VA(logBuffer);
+    output_error (logBuffer);
 }
 
 /*
@@ -76,9 +94,11 @@ void output_error(const char *format, ...)
  */
 void output_debug(const char *format, ...)
 {
+    /*
     if ((tacacs_ctrl & PAM_TAC_DEBUG) == 0) {
         return;
     }
+    */
 
     GENERATE_LOG_FROM_VA(logBuffer);
     output_error (logBuffer);
@@ -130,7 +150,9 @@ int send_authorization_message(
     }
 
     re.msg = NULL;
+    output_verbose("send authorizatiom message with user: %s, tty: %s, host: %s\n", user, tty, host);
     retval = tac_author_send(tac_fd, (char *)user, (char *)tty, (char *)host, attr);
+    output_verbose("authorization result: %d\n", retval);
 
     if(retval < 0) {
             output_error("send of authorization message failed: %s\n", strerror(errno));
@@ -304,8 +326,52 @@ void plugin_init ()
  */
 void plugin_uninit ()
 {
-    output_verbose("tacacs plugin un-initialize.");
+    output_verbose("tacacs plugin un-initialize.\n");
 }
+
+/*
+ * Check if current user is local user.
+ */
+int is_local_user (char *user)
+{
+    struct passwd pwd;
+    struct passwd *pwdresult;
+    char *buf;
+    size_t bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
+    if (bufsize == -1) {
+        bufsize = DEFAULT_SC_GETPW_R_SIZE_MAX;
+    }
+
+    buf = malloc(bufsize);
+    if (buf == NULL) {
+       output_error("failed to allocate getpwnam_r buffer.\n");
+       return ERROR_CHECK_LOCAL_USER;
+    }
+
+    int s = getpwnam_r(user, &pwd, buf, bufsize, &pwdresult);
+    int result = IS_LOCAL_USER;
+    if (pwdresult == NULL) {
+        if (s == 0)
+            output_error("get user information user failed, user: %s not found\n", user);
+        else {
+            output_error("get user information failed, user: %s, errorno: %d\n", user, s);
+        }
+        
+        result = ERROR_CHECK_LOCAL_USER;
+    }
+    else if (strncmp(pwd.pw_gecos, REMOTE_USER_GECOS_PREFIX, strlen(REMOTE_USER_GECOS_PREFIX)) == 0) {
+        output_verbose("user: %s, UID: %d, GECOS: %s is remote user.\n", user, pwd.pw_uid, pwd.pw_gecos);
+        result = IS_REMOTE_USER;
+    }
+    else {
+        output_verbose("user: %s, UID: %d, GECOS: %s is local user.\n", user, pwd.pw_uid, pwd.pw_gecos);
+        result = IS_LOCAL_USER;
+    }
+
+    free(buf);
+    return result;
+}
+
 
 /*
  * Tacacs authorization.
@@ -337,19 +403,44 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
     // reload config file when tacacs config changed
     check_and_load_changed_tacacs_config();
 
-    int ret = authorization_with_host_and_tty(user, cmd, argv, argc);
-    switch (ret) {
-        case 0:
-            output_verbose("%s authorize successed by TACACS+ with given arguments\n", cmd);
-        break;
-        case -2:
-            /*  -2 means no servers, so already a message */
-            output_verbose("%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
-        break;
-        default:
-            output_verbose("%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
-        break;
+    int check_local_user_result = is_local_user(user);
+    if (check_local_user_result != IS_REMOTE_USER) {
+        /*
+            Return 0 to check with linux permission control in following 2 scenario:
+                1: ERROR_CHECK_LOCAL_USER: check if user is local user failed because can't get user information.
+                        In this case, as failback, check with linux permission control.
+                2: IS_LOCAL_USER: user login as local user.
+                        In this case, tacacs authorization disabled for local user.
+        */
+        output_verbose("ignore TACACS+ authorization for current user, check with local permission.\n");
+        return 0;
     }
-    
-    return ret;
+
+    output_verbose("start TACACS+ authorization for command %s with given arguments\n", cmd);
+    if (tacacs_ctrl & AUTHORIZATION_FLAG_TACACS) {
+        int ret = authorization_with_host_and_tty(user, cmd, argv, argc);
+        switch (ret) {
+            case 0:
+                output_verbose("%s authorize successed by TACACS+ with given arguments\n", cmd);
+            break;
+            case -2:
+                /*  -2 means no servers, so already a message */
+                output_verbose("%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
+            break;
+            default:
+                output_verbose("%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
+            break;
+        }
+
+        if (tacacs_ctrl & AUTHORIZATION_FLAG_LOCAL == 0) {
+            // when local authorization disabled, tacacs authorization failed will disable user from run any command
+            output_verbose("local authorization disabled, TACACS+ authorization result: %d\n", ret);
+            //return ret;
+            return 0;
+        }
+    }
+
+    // return 0 to check user permission with linux permission check. 
+    output_verbose("start local authorization for command %s with given arguments\n", cmd);
+    return 0;
 }

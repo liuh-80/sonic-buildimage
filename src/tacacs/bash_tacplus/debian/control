@@ -7,5 +7,5 @@ Description: Bash TACACS+ plugin.
 
 Package: bash-tacplus
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libtac-dev, libtac2
+Depends: ${shlibs:Depends}, ${misc:Depends}, libtac2
 Description: Bash TACACS+ plugin for per-command TACACS+ authorization.
