@@ -1,3 +1,19 @@
+#
+# Copyright (c) 2019-2021 NVIDIA CORPORATION & AFFILIATES.
+# Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 #############################################################################
 # Mellanox
 #
@@ -351,7 +367,7 @@ class Component(ComponentBase):
             return FW_AUTO_ERR_IMAGE
 
         if boot_action in default_supported_boot:
-            if self.install_firmware(image_path):
+            if self.update_firmware(image_path):
                 # Successful update
                 return FW_AUTO_INSTALLED
             # Failed update (unknown reason)
@@ -404,10 +420,6 @@ class Component(ComponentBase):
         if self.image_ext_name is not None:
             if name_list[1] != self.image_ext_name:
                 print("ERROR: Extend name of file {} is wrong. Image for {} should have extend name {}".format(image_path, self.name, self.image_ext_name))
-                return False
-        else:
-            if name_list[1]:
-                print("ERROR: Extend name of file {} is wrong. Image for {} shouldn't have extension".format(image_path, self.name))
                 return False
 
         return True
@@ -520,7 +532,7 @@ class ComponentSSD(Component):
             return FW_AUTO_ERR_UKNOWN
 
         if boot_action in supported_boot:
-            if self.install_firmware(image_path):
+            if self.update_firmware(image_path):
                 # Successful update
                 return FW_AUTO_INSTALLED
             # Failed update (unknown reason)
