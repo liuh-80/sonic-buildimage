@@ -387,7 +387,7 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
     output_debug("    Parameters:\n");
     char **parameter_array_pointer = argv;
     int argc = 0;
-    while (*parameter_array_pointer != 0) {
+    while (*parameter_array_pointer != NULL) {
         // output parameter
         output_debug("        %s\n", *parameter_array_pointer);
 
@@ -402,7 +402,7 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
         return 0;
     }
     
-    if (user == 0) {
+    if (user == NULL) {
         // when use is null, command start by a system service.
         output_debug("User is null, command run by system service. authorization ignored.\n", cmd);
         return 0;
