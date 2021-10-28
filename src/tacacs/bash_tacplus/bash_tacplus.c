@@ -33,6 +33,10 @@
 #define syslog mock_syslog
 #endif
 
+
+/* Tacacs+ log format */
+#define  TACACS_LOG_FORMAT "TACACS+: %s"
+
 /* 
     Convert log to a string because va args resoursive issue:
     http://www.c-faq.com/varargs/handoff.html
@@ -61,32 +65,17 @@ typedef struct {
 int tacacs_ctrl;
 
 /*
- * Output verbose log.
- */
-void output_verbose(const char *format, ...)
-{
-    /*
-    syslog(LOG_INFO,"TACACS+: ");
-
-    GENERATE_LOG_FROM_VA(logBuffer);
-    syslog(LOG_INFO, "%s", logBuffer);
-    */
-    GENERATE_LOG_FROM_VA(logBuffer);
-    output_error (logBuffer);
-}
-
-/*
  * Output error message.
  */
 void output_error(const char *format, ...)
 {
-    fprintf(stderr, "TACACS+: ");
-    syslog(LOG_ERR,"TACACS+: ");
-
     GENERATE_LOG_FROM_VA(logBuffer);
 
-    fprintf(stderr, "%s", logBuffer);
-    syslog(LOG_ERR, "%s", logBuffer);
+    if (tacacs_ctrl & PAM_TAC_DEBUG) {
+        fprintf(stderr, TACACS_LOG_FORMAT, logBuffer);
+    }
+
+    syslog(LOG_ERR, TACACS_LOG_FORMAT, logBuffer);
 }
 
 /*
@@ -94,14 +83,13 @@ void output_error(const char *format, ...)
  */
 void output_debug(const char *format, ...)
 {
-    /*
-    if ((tacacs_ctrl & PAM_TAC_DEBUG) == 0) {
+    if (tacacs_ctrl & PAM_TAC_DEBUG == 0) {
         return;
     }
-    */
 
     GENERATE_LOG_FROM_VA(logBuffer);
-    output_error (logBuffer);
+    fprintf(stderr, TACACS_LOG_FORMAT, logBuffer);
+    syslog(LOG_DEBUG, TACACS_LOG_FORMAT, logBuffer);
 }
 
 
@@ -145,14 +133,14 @@ int send_authorization_message(
         else {
             arg = args[i];
         }
-        
+
         tac_add_attrib(&attr, "cmd-arg", (char *)arg);
     }
 
     re.msg = NULL;
-    output_verbose("send authorizatiom message with user: %s, tty: %s, host: %s\n", user, tty, host);
+    output_debug("send authorizatiom message with user: %s, tty: %s, host: %s\n", user, tty, host);
     retval = tac_author_send(tac_fd, (char *)user, (char *)tty, (char *)host, attr);
-    output_verbose("authorization result: %d\n", retval);
+    output_debug("authorization result: %d\n", retval);
 
     if(retval < 0) {
             output_error("send of authorization message failed: %s\n", strerror(errno));
@@ -199,10 +187,10 @@ int tacacs_authorization(
         server_fd = tac_connect_single(tac_srv[server_idx].addr, tac_srv[server_idx].key, tac_source_addr, tac_timeout, __vrfname);
         if(server_fd < 0) {
             // connect to tacacs server failed
-            output_debug("Failed to connecting to %s to request authorization for %s: %s\n", tac_ntop(tac_srv[server_idx].addr->ai_addr), cmd, strerror(errno));
+            output_error("Failed to connecting to %s to request authorization for %s: %s\n", tac_ntop(tac_srv[server_idx].addr->ai_addr), cmd, strerror(errno));
             continue;
         }
-        
+
         // increase connected servers 
         connected_servers++;
         result = send_authorization_message(server_fd, user, tty, host, task_id, cmd, args, argc);
@@ -221,9 +209,9 @@ int tacacs_authorization(
     // can't connect to any server
     if(!connected_servers) {
         result = -2;
-        output_debug("Failed to connect to TACACS server(s)\n");
+        output_error("Failed to connect to TACACS server(s)\n");
     }
-    
+
     return result;
 }
 
@@ -236,32 +224,32 @@ int authorization_with_host_and_tty(const char *user, const char *cmd, char **ar
     // try get host name
     char hostname[64];
     memset(&hostname, 0, sizeof(hostname));
-    
+
     (void)gethostname(hostname, sizeof(hostname) -1);
     if (!hostname[0]) {
         snprintf(hostname, sizeof(hostname), "UNK");
-        output_debug("Failed to determine hostname, passing %s\n", hostname);
+        output_error("Failed to determine hostname, passing %s\n", hostname);
     }
 
     // try get tty name
     char ttyname[64];
     memset(&ttyname, 0, sizeof(ttyname));
-    
+
     int i;
     for(i=0; i<3; i++) {
         int result;
         if (isatty(i)) {
             result = ttyname_r(i, ttyname, sizeof(ttyname) -1);
             if (result) {
-                output_debug("Failed to get tty name for fd %d: %s\n", i, strerror(result));
+                output_error("Failed to get tty name for fd %d: %s\n", i, strerror(result));
             }
             break;
         }
     }
-    
+
     if (!ttyname[0]) {
         snprintf(ttyname, sizeof(ttyname), "UNK");
-        output_debug("Failed to determine tty, passing %s\n", ttyname);
+        output_error("Failed to determine tty, passing %s\n", ttyname);
     }
 
     // send tacacs authorization request
@@ -276,20 +264,24 @@ void load_tacacs_config()
     // load config file: tacacs_config_file
     tacacs_ctrl = parse_config_file (tacacs_config_file);
 
-    output_verbose("tacacs config updated:\n");
+    output_debug("tacacs config updated:\n");
     int server_idx;
     for(server_idx = 0; server_idx < tac_srv_no; server_idx++) {
-        output_verbose("Server %d, address:%s, key length:%d\n", server_idx, tac_ntop(tac_srv[server_idx].addr->ai_addr),strlen(tac_srv[server_idx].key));
+        output_debug("Server %d, address:%s, key length:%d\n", server_idx, tac_ntop(tac_srv[server_idx].addr->ai_addr),strlen(tac_srv[server_idx].key));
     }
 
-    output_verbose("TACACS+ control flag: %x\n", tacacs_ctrl);
+    output_debug("TACACS+ control flag: 0x%x\n", tacacs_ctrl);
     
-    if (tacacs_ctrl && AUTHORIZATION_FLAG_TACACS) {
-        output_verbose("TACACS+ per-command authorization enabled.\n");
+    if (tacacs_ctrl & AUTHORIZATION_FLAG_TACACS) {
+        output_debug("TACACS+ per-command authorization enabled.\n");
     }
 
-    if (tacacs_ctrl && AUTHORIZATION_FLAG_LOCAL) {
-        output_verbose("Local per-command authorization enabled.\n");
+    if (tacacs_ctrl & AUTHORIZATION_FLAG_LOCAL) {
+        output_debug("Local per-command authorization enabled.\n");
+    }
+    
+    if (tacacs_ctrl & PAM_TAC_DEBUG) {
+        output_debug("TACACS+ debug enabled.\n");
     }
 }
 
@@ -304,15 +296,15 @@ void check_and_load_changed_tacacs_config()
     char date[36];
     strftime(date, 36, "%d.%m.%Y %H:%M:%S", localtime(&(attr.st_mtime)));
     if (difftime(attr.st_mtime, config_file_attr.st_mtime) == 0) {
-        output_verbose("tacacs config file not change: last modified time: %s.\n", date);
+        output_debug("tacacs config file not change: last modified time: %s.\n", date);
         return;
     }
-    
-    output_verbose("tacacs config file changed: last modified time: %s.\n", date);
-    
+
+    output_debug("tacacs config file changed: last modified time: %s.\n", date);
+
     // config file changed, update file stat and reload config.
     config_file_attr = attr;
-    
+
     // load config file
     load_tacacs_config();
 }
@@ -320,7 +312,7 @@ void check_and_load_changed_tacacs_config()
 /*
  * Tacacs plugin initialization.
  */
-void plugin_init ()
+void plugin_init()
 {
     // get config file stat, will use this to check config file changed
     stat(tacacs_config_file, &config_file_attr);
@@ -328,21 +320,21 @@ void plugin_init ()
     // load config file: tacacs_config_file
     load_tacacs_config();
 
-    output_verbose("tacacs plugin initialized.\n");
+    output_debug("tacacs plugin initialized.\n");
 }
 
 /*
  * Tacacs plugin release.
  */
-void plugin_uninit ()
+void plugin_uninit()
 {
-    output_verbose("tacacs plugin un-initialize.\n");
+    output_debug("tacacs plugin un-initialize.\n");
 }
 
 /*
  * Check if current user is local user.
  */
-int is_local_user (char *user)
+int is_local_user(char *user)
 {
     struct passwd pwd;
     struct passwd *pwdresult;
@@ -370,11 +362,11 @@ int is_local_user (char *user)
         result = ERROR_CHECK_LOCAL_USER;
     }
     else if (strncmp(pwd.pw_gecos, REMOTE_USER_GECOS_PREFIX, strlen(REMOTE_USER_GECOS_PREFIX)) == 0) {
-        output_verbose("user: %s, UID: %d, GECOS: %s is remote user.\n", user, pwd.pw_uid, pwd.pw_gecos);
+        output_debug("user: %s, UID: %d, GECOS: %s is remote user.\n", user, pwd.pw_uid, pwd.pw_gecos);
         result = IS_REMOTE_USER;
     }
     else {
-        output_verbose("user: %s, UID: %d, GECOS: %s is local user.\n", user, pwd.pw_uid, pwd.pw_gecos);
+        output_debug("user: %s, UID: %d, GECOS: %s is local user.\n", user, pwd.pw_uid, pwd.pw_gecos);
         result = IS_LOCAL_USER;
     }
 
@@ -388,25 +380,25 @@ int is_local_user (char *user)
  */
 int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
 {
-    output_verbose("Authorization parameters:\n");
-    output_verbose("    Shell level: %d\n", shell_level);
-    output_verbose("    Current user: %s\n", user);
-    output_verbose("    Command full path: %s\n", cmd);
-    output_verbose("    Parameters:\n");
+    output_debug("Authorization parameters:\n");
+    output_debug("    Shell level: %d\n", shell_level);
+    output_debug("    Current user: %s\n", user);
+    output_debug("    Command full path: %s\n", cmd);
+    output_debug("    Parameters:\n");
     char **parameter_array_pointer = argv;
     int argc = 0;
     while (*parameter_array_pointer != 0) {
         // output parameter
-        output_verbose("        %s\n", *parameter_array_pointer);
-        
+        output_debug("        %s\n", *parameter_array_pointer);
+
         // move to next parameter
         parameter_array_pointer++;
         argc++;
     }
-    
+
     // when shell_level > 1, it's a recursive command in shell script.
     if (shell_level > 2) {
-        output_verbose("Recursive command %s ignored.\n", cmd);
+        output_debug("Recursive command %s ignored.\n", cmd);
         return 0;
     }
 
@@ -422,35 +414,36 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
                 2: IS_LOCAL_USER: user login as local user.
                         In this case, tacacs authorization disabled for local user.
         */
-        output_verbose("ignore TACACS+ authorization for current user, check with local permission.\n");
+        output_debug("ignore TACACS+ authorization for current user, check with local permission.\n");
         return 0;
     }
 
-    output_verbose("start TACACS+ authorization for command %s with given arguments\n", cmd);
     if (tacacs_ctrl & AUTHORIZATION_FLAG_TACACS) {
+        output_debug("start TACACS+ authorization for command %s with given arguments\n", cmd);
         int ret = authorization_with_host_and_tty(user, cmd, argv, argc);
         switch (ret) {
             case 0:
-                output_verbose("%s authorize successed by TACACS+ with given arguments\n", cmd);
+                output_debug("%s authorize successed by TACACS+ with given arguments\n", cmd);
             break;
             case -2:
                 /*  -2 means no servers, so already a message */
-                output_verbose("%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
+                output_debug("%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
+                fprintf(stderr, "%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
             break;
             default:
-                output_verbose("%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
+                output_debug("%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
+                fprintf(stderr, "%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
             break;
         }
 
         if (tacacs_ctrl & AUTHORIZATION_FLAG_LOCAL == 0) {
-            // when local authorization disabled, tacacs authorization failed will disable user from run any command
-            output_verbose("local authorization disabled, TACACS+ authorization result: %d\n", ret);
-            //return ret;
-            return 0;
+            // when local authorization disabled, tacacs authorization failed will block user from run current command
+            output_debug("local authorization disabled, TACACS+ authorization result: %d\n", ret);
+            return ret;
         }
     }
 
-    // return 0 to check user permission with linux permission check. 
-    output_verbose("start local authorization for command %s with given arguments\n", cmd);
+    // return 0, so bash will continue run user command and will check user permission with linux permission check. 
+    output_debug("start local authorization for command %s with given arguments\n", cmd);
     return 0;
 }
