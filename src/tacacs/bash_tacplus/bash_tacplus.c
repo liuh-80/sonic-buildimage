@@ -281,6 +281,16 @@ void load_tacacs_config()
     for(server_idx = 0; server_idx < tac_srv_no; server_idx++) {
         output_verbose("Server %d, address:%s, key length:%d\n", server_idx, tac_ntop(tac_srv[server_idx].addr->ai_addr),strlen(tac_srv[server_idx].key));
     }
+
+    output_verbose("TACACS+ control flag: %x\n", tacacs_ctrl);
+    
+    if (tacacs_ctrl && AUTHORIZATION_FLAG_TACACS) {
+        output_verbose("TACACS+ per-command authorization enabled.\n");
+    }
+
+    if (tacacs_ctrl && AUTHORIZATION_FLAG_LOCAL) {
+        output_verbose("Local per-command authorization enabled.\n");
+    }
 }
 
 /*
