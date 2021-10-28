@@ -396,9 +396,15 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
         argc++;
     }
 
-    // when shell_level > 1, it's a recursive command in shell script.
     if (shell_level > 2) {
+        // when shell_level > 1, it's a recursive command in shell script.
         output_debug("Recursive command %s ignored.\n", cmd);
+        return 0;
+    }
+    
+    if (user == 0) {
+        // when use is null, command start by a system service.
+        output_debug("User is null, command run by system service. authorization ignored.\n", cmd);
         return 0;
     }
 
