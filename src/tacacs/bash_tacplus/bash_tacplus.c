@@ -83,7 +83,7 @@ void output_error(const char *format, ...)
  */
 void output_debug(const char *format, ...)
 {
-    if (tacacs_ctrl & PAM_TAC_DEBUG == 0) {
+    if ((tacacs_ctrl & PAM_TAC_DEBUG) == 0) {
         return;
     }
 
@@ -436,7 +436,7 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
             break;
         }
 
-        if (tacacs_ctrl & AUTHORIZATION_FLAG_LOCAL == 0) {
+        if ((tacacs_ctrl & AUTHORIZATION_FLAG_LOCAL) == 0) {
             // when local authorization disabled, tacacs authorization failed will block user from run current command
             output_debug("local authorization disabled, TACACS+ authorization result: %d\n", ret);
             return ret;
