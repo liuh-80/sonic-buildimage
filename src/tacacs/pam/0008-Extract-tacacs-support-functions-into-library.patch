@@ -1,21 +1,21 @@
-From d820001f60e0a9f5e5df83b1edb229be5212e0b5 Mon Sep 17 00:00:00 2001
+From a4305abf31b3b2d6123b4e87511d5cac30391305 Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
 Date: Tue, 12 Oct 2021 10:09:10 +0800
-Subject: [PATCH 3/4] Extract tacacs support functions into library.
+Subject: [PATCH 1/2] Extract tacacs support functions into library.
 
 ---
- Makefile.am         |  16 ++-
+ Makefile.am         |  16 +-
  configure.ac        |   3 +-
  libtacsupport.pc.in |  11 ++
  pam_tacplus.c       |   3 -
- pam_tacplus.h       |   6 --
- support.c           | 255 ++++++++++++++++++++++++++------------------
- support.h           |  14 +++
- 7 files changed, 194 insertions(+), 114 deletions(-)
+ pam_tacplus.h       |   6 -
+ support.c           | 410 +++++++++++++++++++++++++-------------------
+ support.h           |  14 ++
+ 7 files changed, 274 insertions(+), 189 deletions(-)
  create mode 100644 libtacsupport.pc.in
 
 diff --git a/Makefile.am b/Makefile.am
-index c90c582..2ac9ea0 100644
+index c90c582..b22c78b 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -20,7 +20,7 @@ libtac/include/tacplus.h \
@@ -61,7 +61,7 @@ index c90c582..2ac9ea0 100644
 +pkgconfig_DATA = libtac.pc libtacsupport.pc 
  
 diff --git a/configure.ac b/configure.ac
-index f67e2ba..0f917a8 100644
+index f67e2ba..e2e3fa9 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -95,6 +95,7 @@ AM_CONDITIONAL(DOC, test "x$enable_doc" != "xno")
@@ -75,7 +75,7 @@ index f67e2ba..0f917a8 100644
  AC_OUTPUT
 diff --git a/libtacsupport.pc.in b/libtacsupport.pc.in
 new file mode 100644
-index 0000000..1f12fe0
+index 0000000..9698094
 --- /dev/null
 +++ b/libtacsupport.pc.in
 @@ -0,0 +1,11 @@
@@ -122,21 +122,161 @@ index bc71b54..e7b30f7 100644
  #define PAM_TAC_VMAJ 1
  #define PAM_TAC_VMIN 3
 diff --git a/support.c b/support.c
-index e22fa31..5b6e1fa 100644
+index 2f77bc8..de7e5f2 100644
 --- a/support.c
 +++ b/support.c
-@@ -29,6 +29,7 @@
+@@ -29,21 +29,22 @@
  
  #include <stdlib.h>
  #include <string.h>
 +#include <ctype.h> /* isspace() */
  
- /* tacacs server information */
+-/* tacacs server information */
++/* tacacs server information */
  tacplus_server_t tac_srv[TAC_PLUS_MAXSERVERS];
-@@ -236,9 +237,160 @@ void set_source_ip(const char *tac_source_ip) {
-     }
+-struct addrinfo tac_srv_addr[TAC_PLUS_MAXSERVERS];
+-struct sockaddr tac_sock_addr[TAC_PLUS_MAXSERVERS];
+-struct sockaddr_in6 tac_sock6_addr[TAC_PLUS_MAXSERVERS];
+-
++struct addrinfo tac_srv_addr[TAC_PLUS_MAXSERVERS];
++struct sockaddr tac_sock_addr[TAC_PLUS_MAXSERVERS];
++struct sockaddr_in6 tac_sock6_addr[TAC_PLUS_MAXSERVERS];
++
+ int tac_srv_no = 0;
+ 
+ char tac_service[64];
+ char tac_protocol[64];
+ char tac_prompt[64];
+-char *__vrfname=NULL;
+-char tac_source_ip[64];
+-struct addrinfo *tac_source_addr = NULL;
++char *__vrfname=NULL;
++char tac_source_ip[64];
++struct addrinfo *tac_source_addr = NULL;
+ 
+ void _pam_log(int err, const char *format,...) {
+     char msg[256];
+@@ -178,69 +179,186 @@ int tacacs_get_password (pam_handle_t * pamh, int flags
+     return PAM_SUCCESS;
  }
  
+-/*
+- * Set tacacs server addrinfo.
+- */
+-void set_tacacs_server_addr(int tac_srv_no, struct addrinfo* server) {
+-    tac_srv[tac_srv_no].addr = &(tac_srv_addr[tac_srv_no]);
+-    memcpy(tac_srv[tac_srv_no].addr, server, sizeof(struct addrinfo));
+-
+-    if (server->ai_family == AF_INET6) {
+-        tac_srv[tac_srv_no].addr->ai_addr = (struct sockaddr *)&(tac_sock6_addr[tac_srv_no]);
+-        memcpy(tac_srv[tac_srv_no].addr->ai_addr, server->ai_addr, sizeof(struct sockaddr_in6));
+-    }
+-    else {
+-        tac_srv[tac_srv_no].addr->ai_addr = &(tac_sock_addr[tac_srv_no]);
+-        memcpy(tac_srv[tac_srv_no].addr->ai_addr, server->ai_addr, sizeof(struct sockaddr));
+-    }
+-
+-    tac_srv[tac_srv_no].addr->ai_canonname = NULL;
+-    tac_srv[tac_srv_no].addr->ai_next = NULL;
+-}
+-
+-/* set source ip address for the outgoing tacacs packets */
+-void set_source_ip(const char *tac_source_ip) {
+-    /*
+-        addrinfo created by getaddrinfo must be released with freeaddrinfo.
+-        so source ip address will be stored in following static variables.
+-    */
+-    static struct addrinfo tac_source_address;
+-    static struct sockaddr tac_source_sock_addr;
+-    static struct sockaddr_in6 tac_source_sock6_addr;
+-
+-    struct addrinfo hints, *source_address;
+-    int rv;
+-
+-    /* set the source ip address for the tacacs packets */
+-    memset(&hints, 0, sizeof(hints));
+-    hints.ai_family = AF_UNSPEC;
+-    hints.ai_socktype = SOCK_STREAM;
+-    if ((rv = getaddrinfo(tac_source_ip, NULL, &hints,
+-                          &source_address)) != 0) {
+-        _pam_log(LOG_ERR, "error setting the source ip information");
+-    } else {
+-        tac_source_addr = &tac_source_address;
+-        memcpy(tac_source_addr, source_address, sizeof(struct addrinfo));
+-
+-        if (source_address->ai_family == AF_INET6) {
+-            tac_source_addr->ai_addr = (struct sockaddr *)&(tac_source_sock6_addr);
+-            memcpy(tac_source_addr->ai_addr, source_address->ai_addr, sizeof(struct sockaddr_in6));
+-        }
+-        else {
+-            tac_source_addr->ai_addr = &(tac_source_sock_addr);
+-            memcpy(tac_source_addr->ai_addr, source_address->ai_addr, sizeof(struct sockaddr));
+-        }
+-
+-        freeaddrinfo(source_address);
+-        _pam_log(LOG_DEBUG, "source ip is set");
+-    }
+-}
+-
+-int _pam_parse (int argc, const char **argv) {
++/*
++ * Set tacacs server addrinfo.
++ */
++void set_tacacs_server_addr(int tac_srv_no, struct addrinfo* server) {
++    tac_srv[tac_srv_no].addr = &(tac_srv_addr[tac_srv_no]);
++    memcpy(tac_srv[tac_srv_no].addr, server, sizeof(struct addrinfo));
++
++    if (server->ai_family == AF_INET6) {
++        tac_srv[tac_srv_no].addr->ai_addr = (struct sockaddr *)&(tac_sock6_addr[tac_srv_no]);
++        memcpy(tac_srv[tac_srv_no].addr->ai_addr, server->ai_addr, sizeof(struct sockaddr_in6));
++    }
++    else {
++        tac_srv[tac_srv_no].addr->ai_addr = &(tac_sock_addr[tac_srv_no]);
++        memcpy(tac_srv[tac_srv_no].addr->ai_addr, server->ai_addr, sizeof(struct sockaddr));
++    }
++
++    tac_srv[tac_srv_no].addr->ai_canonname = NULL;
++    tac_srv[tac_srv_no].addr->ai_next = NULL;
++}
++
++/* set source ip address for the outgoing tacacs packets */
++void set_source_ip(const char *tac_source_ip) {
++    /*
++        addrinfo created by getaddrinfo must be released with freeaddrinfo.
++        so source ip address will be stored in following static variables.
++    */
++    static struct addrinfo tac_source_address;
++    static struct sockaddr tac_source_sock_addr;
++    static struct sockaddr_in6 tac_source_sock6_addr;
++
++    struct addrinfo hints, *source_address;
++    int rv;
++
++    /* set the source ip address for the tacacs packets */
++    memset(&hints, 0, sizeof(hints));
++    hints.ai_family = AF_UNSPEC;
++    hints.ai_socktype = SOCK_STREAM;
++    if ((rv = getaddrinfo(tac_source_ip, NULL, &hints,
++                          &source_address)) != 0) {
++        _pam_log(LOG_ERR, "error setting the source ip information");
++    } else {
++        tac_source_addr = &tac_source_address;
++        memcpy(tac_source_addr, source_address, sizeof(struct addrinfo));
++
++        if (source_address->ai_family == AF_INET6) {
++            tac_source_addr->ai_addr = (struct sockaddr *)&(tac_source_sock6_addr);
++            memcpy(tac_source_addr->ai_addr, source_address->ai_addr, sizeof(struct sockaddr_in6));
++        }
++        else {
++            tac_source_addr->ai_addr = &(tac_source_sock_addr);
++            memcpy(tac_source_addr->ai_addr, source_address->ai_addr, sizeof(struct sockaddr));
++        }
++
++        freeaddrinfo(source_address);
++        _pam_log(LOG_DEBUG, "source ip is set");
++    }
++}
++
 +/*
 + * Parse one arguments.
 + * Use this method for both:
@@ -144,8 +284,10 @@ index e22fa31..5b6e1fa 100644
 + *    2. config file
 + */
 +int _pam_parse_arg (const char *arg, char* current_secret, uint current_secret_buffer_size) {
-+    int ctrl = 0;
-+
+     int ctrl = 0;
+-    const char *current_secret = NULL;
+ 
+-    /* otherwise the list will grow with each call */
 +    if (!strcmp (arg, "debug")) { /* all */
 +        ctrl |= PAM_TAC_DEBUG;
 +    } else if (!strcmp (arg, "use_first_pass")) {
@@ -254,51 +396,27 @@ index e22fa31..5b6e1fa 100644
 +    return ctrl;
 +}    /* _pam_parse_arg */
 +
-+
 +/*
-+ * Parse config file.
++ * Reset configuration variables.
++ * This method need to be called before parse config, otherwise the server list will grow with each call.
 + */
-+int parse_config_file(const char *file) {
-+    FILE *config_file;
-+    char line_buffer[256];
-+    int ctrl = 0;
-+
-+    config_file = fopen(file, "r");
-+    if(config_file == NULL) {
-+        _pam_log(LOG_ERR, "Failed to open config file %s: %m", file);
-+        return 0;
-+    }
-+
-+    if (tac_source_addr != NULL) {
-+        /* reset source address */
-+        tac_source_addr = NULL;
-+    }
-+
-+    char current_secret[256];
-+    memset(current_secret, 0, sizeof(current_secret));
-+    while (fgets(line_buffer, sizeof line_buffer, config_file)) {
-+        if(*line_buffer == '#' || isspace(*line_buffer))
-+            continue; /* skip comments and blank line. */
-+        strtok(line_buffer, " ,\t\n\r\f");
-+        ctrl |= _pam_parse_arg(line_buffer, current_secret, sizeof(current_secret));
-+    }
-+
-+    fclose(config_file);
-+    return ctrl;
-+}
-+
- int _pam_parse (int argc, const char **argv) {
-     int ctrl = 0;
--    const char *current_secret = NULL;
-+    char current_secret[256];
-+    memset(current_secret, 0, sizeof(current_secret));
- 
-     /* otherwise the list will grow with each call */
++int reset_config_variables () {
      memset(tac_srv, 0, sizeof(tacplus_server_t) * TAC_PLUS_MAXSERVERS);
-@@ -256,106 +408,7 @@ int _pam_parse (int argc, const char **argv) {
-     }
+     tac_srv_no = 0;
  
-     for (ctrl = 0; argc-- > 0; ++argv) {
+@@ -248,114 +366,54 @@ int _pam_parse (int argc, const char **argv) {
+     tac_protocol[0] = 0;
+     tac_prompt[0] = 0;
+     tac_login[0] = 0;
+-    tac_source_ip[0] = 0;
+-
+-    if (tac_source_addr != NULL) {
+-        /* reset source address */
+-        tac_source_addr = NULL;
+-    }
++    tac_source_ip[0] = 0;
+ 
+-    for (ctrl = 0; argc-- > 0; ++argv) {
 -        if (!strcmp (*argv, "debug")) { /* all */
 -            ctrl |= PAM_TAC_DEBUG;
 -        } else if (!strcmp (*argv, "use_first_pass")) {
@@ -370,14 +488,30 @@ index e22fa31..5b6e1fa 100644
 -            }
 -        } else if (!strncmp (*argv, "secret=", 7)) {
 -            int i;
--
++    if (tac_source_addr != NULL) {
++        /* reset source address */
++        tac_source_addr = NULL;
++    }
++}
+ 
 -            current_secret = *argv + 7;     /* points right into argv (which is const) */
--
++/*
++ * Parse config file.
++ */
++int parse_config_file(const char *file) {
++    FILE *config_file;
++    char line_buffer[256];
++    int ctrl = 0;
++    char current_secret[256];
++    memset(current_secret, 0, sizeof(current_secret));
+ 
 -            /* if 'secret=' was given after a 'server=' parameter, fill in the current secret */
 -            for(i = tac_srv_no-1; i >= 0; i--) {
 -                if (tac_srv[i].key[0] != 0)
 -                    break;
--
++    /* otherwise the list will grow with each call */
++    reset_config_variables();
+ 
 -                /* copy secret to key */
 -                snprintf(tac_srv[i].key, sizeof(tac_srv[i].key), "%s", current_secret);
 -            }
@@ -399,12 +533,58 @@ index e22fa31..5b6e1fa 100644
 -        } else {
 -            _pam_log (LOG_WARNING, "unrecognized option: %s", *argv);
 -        }
++    config_file = fopen(file, "r");
++    if(config_file == NULL) {
++        _pam_log(LOG_ERR, "Failed to open config file %s: %m", file);
++        return 0;
++    }
++
++    while (fgets(line_buffer, sizeof line_buffer, config_file)) {
++        if(*line_buffer == '#' || isspace(*line_buffer))
++            continue; /* skip comments and blank line. */
++        strtok(line_buffer, " ,\t\n\r\f");
++        ctrl |= _pam_parse_arg(line_buffer, current_secret, sizeof(current_secret));
++    }
++
++    fclose(config_file);
++    return ctrl;
++}
++
++int _pam_parse (int argc, const char **argv) {
++    int ctrl = 0;
++    char current_secret[256];
++    memset(current_secret, 0, sizeof(current_secret));
++
++    /* otherwise the list will grow with each call */
++    reset_config_variables();
++
++    for (ctrl = 0; argc-- > 0; ++argv) {
 +        ctrl |= _pam_parse_arg(*argv, current_secret, sizeof(current_secret));
      }
  
      if (ctrl & PAM_TAC_DEBUG) {
+@@ -364,15 +422,15 @@ int _pam_parse (int argc, const char **argv) {
+         _pam_log(LOG_DEBUG, "%d servers defined", tac_srv_no);
+ 
+         for(n = 0; n < tac_srv_no; n++) {
+-            _pam_log(LOG_DEBUG, "server[%d] { addr=%s, key='%c*****' }", n, tac_ntop(tac_srv[n].addr->ai_addr), tac_srv[n].key[0]);
++            _pam_log(LOG_DEBUG, "server[%d] { addr=%s, key='%c*****' }", n, tac_ntop(tac_srv[n].addr->ai_addr), tac_srv[n].key[0]);
+         }
+ 
+         _pam_log(LOG_DEBUG, "tac_service='%s'", tac_service);
+         _pam_log(LOG_DEBUG, "tac_protocol='%s'", tac_protocol);
+         _pam_log(LOG_DEBUG, "tac_prompt='%s'", tac_prompt);
+         _pam_log(LOG_DEBUG, "tac_login='%s'", tac_login);
+-        _pam_log(LOG_DEBUG, "tac_source_ip='%s'", tac_source_ip);
++        _pam_log(LOG_DEBUG, "tac_source_ip='%s'", tac_source_ip);
+     }
+ 
+     return ctrl;
+-}    /* _pam_parse */
+\ No newline at end of file
++}    /* _pam_parse */
 diff --git a/support.h b/support.h
-index 6bcb07f..569172e 100644
+index 6bcb07f..27f66de 100644
 --- a/support.h
 +++ b/support.h
 @@ -26,6 +26,14 @@
