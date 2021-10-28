@@ -423,16 +423,13 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
         int ret = authorization_with_host_and_tty(user, cmd, argv, argc);
         switch (ret) {
             case 0:
-                output_debug("%s authorize successed by TACACS+ with given arguments\n", cmd);
             break;
             case -2:
-                /*  -2 means no servers, so already a message */
-                output_debug("%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
-                fprintf(stderr, "%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
+                //  -2 means no servers, so not authorized
+                fprintf(stdout, "%s not authorized by TACACS+ with given arguments, not executing\n", cmd);
             break;
             default:
-                output_debug("%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
-                fprintf(stderr, "%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
+                fprintf(stdout, "%s authorize failed by TACACS+ with given arguments, not executing\n", cmd);
             break;
         }
 
