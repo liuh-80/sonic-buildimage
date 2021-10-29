@@ -51,6 +51,9 @@
 /* Config file path */
 const char *tacacs_config_file = "/etc/tacplus_nss.conf";
 
+/* Unknown user name */
+const char *unknown_username = "UNKNOWN";
+
 
 /* Config file attribute */
 struct stat config_file_attr;
@@ -201,7 +204,7 @@ int tacacs_authorization(
         }
         else {
             // authorization successed
-            output_debug("%s authorized command %s\n", cmd, tac_ntop(tac_srv[server_idx].addr->ai_addr));
+            output_debug("%s authorized from %s\n", cmd, tac_ntop(tac_srv[server_idx].addr->ai_addr));
             break;
         }
     }
@@ -336,6 +339,11 @@ void plugin_uninit()
  */
 int is_local_user(char *user)
 {
+    if (user == unknown_username) {
+        // for unknown user name, when tacacs enabled, always authorization with tacacs.
+        return IS_REMOTE_USER;
+    }
+
     struct passwd pwd;
     struct passwd *pwdresult;
     char *buf;
@@ -374,15 +382,44 @@ int is_local_user(char *user)
     return result;
 }
 
+/*
+ * Get user name.
+ */
+char* get_user_name(char *user)
+{
+    if (user != NULL) {
+        return user;
+    }
+
+    // uid is the real user id: https://man7.org/linux/man-pages/man2/geteuid.2.html
+    output_debug("Login user name is empty, try get user name by euid.\n");
+    uid_t uid = getuid();
+    struct passwd* userwd = getpwuid(uid);
+    if (userwd != NULL && userwd->pw_name != NULL) {
+        return userwd->pw_name;
+    }
+
+    // euid is the effective user name, may not match real user id: https://man7.org/linux/man-pages/man2/geteuid.2.html
+    output_debug("Login user name is empty, try get user name by euid.\n");
+    uid_t euid = geteuid();
+    struct passwd* euserwd = getpwuid(euid);
+    if (euserwd != NULL && euserwd->pw_name != NULL) {
+        return euserwd->pw_name;
+    }
+
+    // if can't find user name by both euid or ruid, return UNKNOWN.
+    return unknown_username;
+}
 
 /*
  * Tacacs authorization.
  */
 int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
 {
+    char* user_namd = get_user_name(user);
     output_debug("Authorization parameters:\n");
     output_debug("    Shell level: %d\n", shell_level);
-    output_debug("    Current user: %s\n", user);
+    output_debug("    Current user: %s\n", user_namd);
     output_debug("    Command full path: %s\n", cmd);
     output_debug("    Parameters:\n");
     char **parameter_array_pointer = argv;
@@ -401,17 +438,11 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
         output_debug("Recursive command %s ignored.\n", cmd);
         return 0;
     }
-    
-    if (user == NULL) {
-        // when use is null, command start by a system service.
-        output_debug("User is null, command run by system service. authorization ignored.\n", cmd);
-        return 0;
-    }
 
     // reload config file when tacacs config changed
     check_and_load_changed_tacacs_config();
 
-    int check_local_user_result = is_local_user(user);
+    int check_local_user_result = is_local_user(user_namd);
     if (check_local_user_result != IS_REMOTE_USER) {
         /*
             Return 0 to check with linux permission control in following 2 scenario:
@@ -426,7 +457,7 @@ int on_shell_execve (char *user, int shell_level, char *cmd, char **argv)
 
     if (tacacs_ctrl & AUTHORIZATION_FLAG_TACACS) {
         output_debug("start TACACS+ authorization for command %s with given arguments\n", cmd);
-        int ret = authorization_with_host_and_tty(user, cmd, argv, argc);
+        int ret = authorization_with_host_and_tty(user_namd, cmd, argv, argc);
         switch (ret) {
             case 0:
             break;
