@@ -1,22 +1,22 @@
-From d8b8aefe50f394c5f78ae45b14283635cb405578 Mon Sep 17 00:00:00 2001
+From d2d1495babcb34474c3db6bc7baec89fd0d9199d Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
-Date: Wed, 29 Sep 2021 16:18:29 +0800
-Subject: [PATCH] Add local accounting.
+Date: Tue, 9 Nov 2021 16:45:13 +0800
+Subject: [PATCH 3/3] Add local accounting.
 
 ---
- audisp-tacplus/Makefile.am        |  2 +-
- audisp-tacplus/audisp-tacplus.c   | 15 ++++++++++++---
- audisp-tacplus/debian/control     |  4 ++--
- audisp-tacplus/local_accounting.c | 19 +++++++++++++++++++
- audisp-tacplus/local_accounting.h |  7 +++++++
- 5 files changed, 41 insertions(+), 6 deletions(-)
- create mode 100644 audisp-tacplus/local_accounting.c
- create mode 100644 audisp-tacplus/local_accounting.h
+ Makefile.am        |  3 +--
+ Makefile.in        |  3 +--
+ audisp-tacplus.c   | 11 ++++++++++-
+ local_accounting.c | 19 +++++++++++++++++++
+ local_accounting.h |  7 +++++++
+ 5 files changed, 38 insertions(+), 5 deletions(-)
+ create mode 100644 local_accounting.c
+ create mode 100644 local_accounting.h
 
-diff --git a/audisp-tacplus/Makefile.am b/audisp-tacplus/Makefile.am
-index 9babd80..0d6dfb6 100644
---- a/audisp-tacplus/Makefile.am
-+++ b/audisp-tacplus/Makefile.am
+diff --git a/Makefile.am b/Makefile.am
+index bc92783..1cada7c 100644
+--- a/Makefile.am
++++ b/Makefile.am
 @@ -4,7 +4,7 @@
  EXTRA_DIST = ChangeLog README audisp_tacplus.spec \
  	audisp-tac_plus.conf audisp-tacplus.conf
@@ -26,10 +26,32 @@ index 9babd80..0d6dfb6 100644
  audisp_tacplus_CFLAGS = -O
  audisp_tacplus_LDADD = -lauparse -ltacsupport -ltac
  sbin_PROGRAMS = audisp-tacplus
-diff --git a/audisp-tacplus/audisp-tacplus.c b/audisp-tacplus/audisp-tacplus.c
-index 61ccde7..b1dc598 100644
---- a/audisp-tacplus/audisp-tacplus.c
-+++ b/audisp-tacplus/audisp-tacplus.c
+@@ -27,7 +27,6 @@ install-data-hook:
+ 	${INSTALL} -m 755 audisp-tacplus $(DESTDIR)$(sbindir)
+ 	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audisp/plugins.d
+ 	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audit/rules.d
+-	${INSTALL} -m 600 audisp-tac_plus.conf $(DESTDIR)$(sysconfdir)/audisp/
+ 	${INSTALL} -m 644 audisp-tacplus.conf $(DESTDIR)$(sysconfdir)/audisp/plugins.d
+ 	${INSTALL} -m 644 -o 0 audisp-tacplus.rules $(DESTDIR)$(sysconfdir)/audit/rules.d
+ 
+diff --git a/Makefile.in b/Makefile.in
+index d124c16..5482a9a 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -345,8 +345,7 @@ target_alias = @target_alias@
+ top_build_prefix = @top_build_prefix@
+ top_builddir = @top_builddir@
+ top_srcdir = @top_srcdir@
+-EXTRA_DIST = ChangeLog README audisp_tacplus.spec \
+-	audisp-tac_plus.conf audisp-tacplus.conf
++EXTRA_DIST = ChangeLog README audisp_tacplus.spec audisp-tacplus.conf
+ 
+ audisp_tacplus_SOURCES = audisp-tacplus.c
+ audisp_tacplus_CFLAGS = -O
+diff --git a/audisp-tacplus.c b/audisp-tacplus.c
+index f444f97..ad93ba3 100644
+--- a/audisp-tacplus.c
++++ b/audisp-tacplus.c
 @@ -68,6 +68,9 @@
  /* Remove user secret */
  #include "user_secret.h"
@@ -40,60 +62,26 @@ index 61ccde7..b1dc598 100644
  #define _VMAJ 1
  #define _VMIN 0
  #define _VPATCH 0
-@@ -85,7 +88,7 @@ int tacacs_ctrl;
- const char *unknown_hostname = "UNK";
- 
- /* Config file path */
--const char *tacacs_config_file = "/etc/tacplus_servers";
-+const char *tacacs_config_file = "/etc/tacplus_nss.conf";
- 
- /* User secret setting file */
- const char *sudoers_path = "/etc/sudoers";
-@@ -268,7 +271,7 @@ send_tacacs_acct(char *user, char *tty, char *host, char *cmdmsg, int type,
-     int retval, srv_i, srv_fd;
- 
-     for(srv_i = 0; srv_i < tac_srv_no; srv_i++) {
--        srv_fd = tac_connect_single(tac_srv[srv_i].addr, tac_srv[srv_i].key, &tac_source_addr, tac_timeout, __vrfname);
-+        srv_fd = tac_connect_single(tac_srv[srv_i].addr, tac_srv[srv_i].key, tac_source_addr, tac_timeout, __vrfname);
-         if(srv_fd < 0) {
-             syslog(LOG_WARNING, "connection to %s failed (%d) to send"
-                 " accounting record: %m",
-@@ -511,7 +514,13 @@ static void get_acct_record(auparse_state_t *au, int type)
+@@ -508,7 +511,13 @@ static void get_acct_record(auparse_state_t *au, int type)
       * loguser is always set, we bail if not.  For ANOM_ABEND, tty may be
       *  unknown, and in some cases, host may be not be set.
       */
--    send_tacacs_acct(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
+-    send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
 +    if (tacacs_ctrl & ACCOUNTING_FLAG_TACACS) {
-+        send_tacacs_acct(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
++        send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
 +    }
 +    
 +    if (tacacs_ctrl & ACCOUNTING_FLAG_LOCAL) {
-+        accounting_to_syslog(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
++        accounting_to_syslog(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
 +    }
  
-     if(freeloguser) {
+     if(freeloguser)
          free(loguser);
-diff --git a/audisp-tacplus/debian/control b/audisp-tacplus/debian/control
-index 5306bd9..3152b45 100644
---- a/audisp-tacplus/debian/control
-+++ b/audisp-tacplus/debian/control
-@@ -2,9 +2,9 @@ Source: audisp-tacplus
- Section: admin
- Priority: optional
- Maintainer: Dave Olson <olson@cumulusnetworks.com>
--Build-Depends: debhelper (>= 9), autotools-dev, autoconf, libpam-tacplus-dev,
-+Build-Depends: debhelper (>= 9), autotools-dev, autoconf,
-     libtac-dev (>= 1.4.1~),
--	libaudit-dev, libauparse-dev, libtacplus-map-dev,
-+	libaudit-dev, libauparse-dev,
- 	dpkg-dev (>= 1.16.1~), git
- Standards-Version: 3.9.6
- Homepage: https://github.com/daveolson53/audisp_tacplus
-diff --git a/audisp-tacplus/local_accounting.c b/audisp-tacplus/local_accounting.c
+diff --git a/local_accounting.c b/local_accounting.c
 new file mode 100644
 index 0000000..47ba17d
 --- /dev/null
-+++ b/audisp-tacplus/local_accounting.c
++++ b/local_accounting.c
 @@ -0,0 +1,19 @@
 +#include <stdint.h>
 +#include <stdarg.h>
@@ -115,11 +103,11 @@ index 0000000..47ba17d
 +    syslog(LOG_INFO, "%s", accounting_buffer);
 +}
 \ No newline at end of file
-diff --git a/audisp-tacplus/local_accounting.h b/audisp-tacplus/local_accounting.h
+diff --git a/local_accounting.h b/local_accounting.h
 new file mode 100644
 index 0000000..04ec6e2
 --- /dev/null
-+++ b/audisp-tacplus/local_accounting.h
++++ b/local_accounting.h
 @@ -0,0 +1,7 @@
 +#if !defined (LOCAL_ACCOUNTING_H)
 +#define LOCAL_ACCOUNTING_H
