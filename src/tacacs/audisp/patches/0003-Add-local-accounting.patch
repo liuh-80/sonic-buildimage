@@ -1,15 +1,15 @@
-From c39a7d7269c37e5572989f40c7bf0d0f1a57237f Mon Sep 17 00:00:00 2001
+From d8b8aefe50f394c5f78ae45b14283635cb405578 Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
 Date: Wed, 29 Sep 2021 16:18:29 +0800
 Subject: [PATCH] Add local accounting.
 
 ---
  audisp-tacplus/Makefile.am        |  2 +-
- audisp-tacplus/audisp-tacplus.c   | 11 ++++++++++-
+ audisp-tacplus/audisp-tacplus.c   | 15 ++++++++++++---
  audisp-tacplus/debian/control     |  4 ++--
  audisp-tacplus/local_accounting.c | 19 +++++++++++++++++++
  audisp-tacplus/local_accounting.h |  7 +++++++
- 5 files changed, 39 insertions(+), 4 deletions(-)
+ 5 files changed, 41 insertions(+), 6 deletions(-)
  create mode 100644 audisp-tacplus/local_accounting.c
  create mode 100644 audisp-tacplus/local_accounting.h
 
@@ -27,7 +27,7 @@ index 9babd80..0d6dfb6 100644
  audisp_tacplus_LDADD = -lauparse -ltacsupport -ltac
  sbin_PROGRAMS = audisp-tacplus
 diff --git a/audisp-tacplus/audisp-tacplus.c b/audisp-tacplus/audisp-tacplus.c
-index 61ccde7..33fc20d 100644
+index 61ccde7..b1dc598 100644
 --- a/audisp-tacplus/audisp-tacplus.c
 +++ b/audisp-tacplus/audisp-tacplus.c
 @@ -68,6 +68,9 @@
@@ -40,6 +40,24 @@ index 61ccde7..33fc20d 100644
  #define _VMAJ 1
  #define _VMIN 0
  #define _VPATCH 0
+@@ -85,7 +88,7 @@ int tacacs_ctrl;
+ const char *unknown_hostname = "UNK";
+ 
+ /* Config file path */
+-const char *tacacs_config_file = "/etc/tacplus_servers";
++const char *tacacs_config_file = "/etc/tacplus_nss.conf";
+ 
+ /* User secret setting file */
+ const char *sudoers_path = "/etc/sudoers";
+@@ -268,7 +271,7 @@ send_tacacs_acct(char *user, char *tty, char *host, char *cmdmsg, int type,
+     int retval, srv_i, srv_fd;
+ 
+     for(srv_i = 0; srv_i < tac_srv_no; srv_i++) {
+-        srv_fd = tac_connect_single(tac_srv[srv_i].addr, tac_srv[srv_i].key, &tac_source_addr, tac_timeout, __vrfname);
++        srv_fd = tac_connect_single(tac_srv[srv_i].addr, tac_srv[srv_i].key, tac_source_addr, tac_timeout, __vrfname);
+         if(srv_fd < 0) {
+             syslog(LOG_WARNING, "connection to %s failed (%d) to send"
+                 " accounting record: %m",
 @@ -511,7 +514,13 @@ static void get_acct_record(auparse_state_t *au, int type)
       * loguser is always set, we bail if not.  For ANOM_ABEND, tty may be
       *  unknown, and in some cases, host may be not be set.
