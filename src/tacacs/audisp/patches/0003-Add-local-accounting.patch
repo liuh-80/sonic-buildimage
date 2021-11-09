@@ -1,7 +1,7 @@
-From d2d1495babcb34474c3db6bc7baec89fd0d9199d Mon Sep 17 00:00:00 2001
+From 28988030198dc25fb9df20146c061bc938f73775 Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
 Date: Tue, 9 Nov 2021 16:45:13 +0800
-Subject: [PATCH 3/3] Add local accounting.
+Subject: [PATCH] Add local accounting.
 
 ---
  Makefile.am        |  3 +--
@@ -49,7 +49,7 @@ index d124c16..5482a9a 100644
  audisp_tacplus_SOURCES = audisp-tacplus.c
  audisp_tacplus_CFLAGS = -O
 diff --git a/audisp-tacplus.c b/audisp-tacplus.c
-index f444f97..ad93ba3 100644
+index f444f97..4d13d7e 100644
 --- a/audisp-tacplus.c
 +++ b/audisp-tacplus.c
 @@ -68,6 +68,9 @@
@@ -68,11 +68,11 @@ index f444f97..ad93ba3 100644
       */
 -    send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
 +    if (tacacs_ctrl & ACCOUNTING_FLAG_TACACS) {
-+        send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
++        send_tacacs_acct(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
 +    }
 +    
 +    if (tacacs_ctrl & ACCOUNTING_FLAG_LOCAL) {
-+        accounting_to_syslog(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
++        accounting_to_syslog(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
 +    }
  
      if(freeloguser)
