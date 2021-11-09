@@ -240,6 +240,7 @@ RUN apt-get update && apt-get install -y \
 # For initramfs
         bash-completion \
 # For audisp-tacplus
+        libauparse-dev \
         auditd \
 {% if CONFIGURED_ARCH == "amd64" -%}
 # For sonic vs image build
