@@ -1,19 +1,20 @@
-From 993ca93d5a58f60f5ca21a45db276c97288c8c60 Mon Sep 17 00:00:00 2001
+From c39a7d7269c37e5572989f40c7bf0d0f1a57237f Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
 Date: Wed, 29 Sep 2021 16:18:29 +0800
-Subject: [PATCH 3/3] Add local accounting.
+Subject: [PATCH] Add local accounting.
 
 ---
  audisp-tacplus/Makefile.am        |  2 +-
  audisp-tacplus/audisp-tacplus.c   | 11 ++++++++++-
+ audisp-tacplus/debian/control     |  4 ++--
  audisp-tacplus/local_accounting.c | 19 +++++++++++++++++++
  audisp-tacplus/local_accounting.h |  7 +++++++
- 4 files changed, 37 insertions(+), 2 deletions(-)
+ 5 files changed, 39 insertions(+), 4 deletions(-)
  create mode 100644 audisp-tacplus/local_accounting.c
  create mode 100644 audisp-tacplus/local_accounting.h
 
 diff --git a/audisp-tacplus/Makefile.am b/audisp-tacplus/Makefile.am
-index bc92783..f5c6a7c 100644
+index 9babd80..0d6dfb6 100644
 --- a/audisp-tacplus/Makefile.am
 +++ b/audisp-tacplus/Makefile.am
 @@ -4,7 +4,7 @@
@@ -26,7 +27,7 @@ index bc92783..f5c6a7c 100644
  audisp_tacplus_LDADD = -lauparse -ltacsupport -ltac
  sbin_PROGRAMS = audisp-tacplus
 diff --git a/audisp-tacplus/audisp-tacplus.c b/audisp-tacplus/audisp-tacplus.c
-index e7fec29..2533caf 100644
+index 61ccde7..33fc20d 100644
 --- a/audisp-tacplus/audisp-tacplus.c
 +++ b/audisp-tacplus/audisp-tacplus.c
 @@ -68,6 +68,9 @@
@@ -54,9 +55,25 @@ index e7fec29..2533caf 100644
  
      if(freeloguser) {
          free(loguser);
+diff --git a/audisp-tacplus/debian/control b/audisp-tacplus/debian/control
+index 5306bd9..3152b45 100644
+--- a/audisp-tacplus/debian/control
++++ b/audisp-tacplus/debian/control
+@@ -2,9 +2,9 @@ Source: audisp-tacplus
+ Section: admin
+ Priority: optional
+ Maintainer: Dave Olson <olson@cumulusnetworks.com>
+-Build-Depends: debhelper (>= 9), autotools-dev, autoconf, libpam-tacplus-dev,
++Build-Depends: debhelper (>= 9), autotools-dev, autoconf,
+     libtac-dev (>= 1.4.1~),
+-	libaudit-dev, libauparse-dev, libtacplus-map-dev,
++	libaudit-dev, libauparse-dev,
+ 	dpkg-dev (>= 1.16.1~), git
+ Standards-Version: 3.9.6
+ Homepage: https://github.com/daveolson53/audisp_tacplus
 diff --git a/audisp-tacplus/local_accounting.c b/audisp-tacplus/local_accounting.c
 new file mode 100644
-index 0000000..e700994
+index 0000000..47ba17d
 --- /dev/null
 +++ b/audisp-tacplus/local_accounting.c
 @@ -0,0 +1,19 @@
@@ -82,7 +99,7 @@ index 0000000..e700994
 \ No newline at end of file
 diff --git a/audisp-tacplus/local_accounting.h b/audisp-tacplus/local_accounting.h
 new file mode 100644
-index 0000000..8a6ecf8
+index 0000000..04ec6e2
 --- /dev/null
 +++ b/audisp-tacplus/local_accounting.h
 @@ -0,0 +1,7 @@
