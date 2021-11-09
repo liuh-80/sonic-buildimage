@@ -8,7 +8,6 @@ DERIVED_TARGETS = libtac2_$(PAM_TACPLUS_VERSION)_$(CONFIGURED_ARCH).deb \
 
 $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 	# Obtain audisp-tacplus
-	rm -rf .pc
 	rm -rf ./audisp-tacplus
 
 	git clone https://github.com/daveolson53/audisp-tacplus.git
@@ -16,17 +15,15 @@ $(addprefix $(DEST)/, $(MAIN_TARGET)): $(DEST)/% :
 	# checkout by sha1
 	pushd ./audisp-tacplus
 	git checkout 559c9f22edd4f2dea0ecedffb3ad9502b12a75b6
-	popd
 
-	# Apply plugin suport patches
+	# Apply patches
+	cp -r ../patches patches
 	quilt push -a
-
-	# build package
-	pushd ./audisp-tacplus
 
 	# fix aclocal depency issue by run autoconf
 	autoreconf
 
+	# build package
 	dpkg-buildpackage -rfakeroot -b -us -uc -j$(SONIC_CONFIG_MAKE_JOBS) --admindir $(SONIC_DPKG_ADMINDIR)
 	popd
 
