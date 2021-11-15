@@ -1,4 +1,4 @@
-From a55b2c86146c4e322a272d95e8975b3bbc20b98b Mon Sep 17 00:00:00 2001
+From 28988030198dc25fb9df20146c061bc938f73775 Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
 Date: Tue, 9 Nov 2021 16:45:13 +0800
 Subject: [PATCH] Add local accounting.
@@ -6,10 +6,10 @@ Subject: [PATCH] Add local accounting.
 ---
  Makefile.am        |  3 +--
  Makefile.in        |  3 +--
- audisp-tacplus.c   | 13 +++++++++++--
+ audisp-tacplus.c   | 11 ++++++++++-
  local_accounting.c | 19 +++++++++++++++++++
  local_accounting.h |  7 +++++++
- 5 files changed, 39 insertions(+), 6 deletions(-)
+ 5 files changed, 38 insertions(+), 5 deletions(-)
  create mode 100644 local_accounting.c
  create mode 100644 local_accounting.h
 
@@ -49,7 +49,7 @@ index d124c16..5482a9a 100644
  audisp_tacplus_SOURCES = audisp-tacplus.c
  audisp_tacplus_CFLAGS = -O
 diff --git a/audisp-tacplus.c b/audisp-tacplus.c
-index f444f97..38ad56d 100644
+index f444f97..4d13d7e 100644
 --- a/audisp-tacplus.c
 +++ b/audisp-tacplus.c
 @@ -68,6 +68,9 @@
@@ -62,15 +62,6 @@ index f444f97..38ad56d 100644
  #define _VMAJ 1
  #define _VMIN 0
  #define _VPATCH 0
-@@ -357,7 +360,7 @@ static void get_acct_record(auparse_state_t *au, int type)
-     memset(host, 0, sizeof(host));
-     if (gethostname(host, sizeof(host)) != 0)
-     {
--        strncpy(host, unknown_hostname, sizeof(host));
-+        strncpy(host, unknown_hostname, sizeof(host)-1);
-     }
- 
-     if(get_field(au, "syscall"))
 @@ -508,7 +511,13 @@ static void get_acct_record(auparse_state_t *au, int type)
       * loguser is always set, we bail if not.  For ANOM_ABEND, tty may be
       *  unknown, and in some cases, host may be not be set.

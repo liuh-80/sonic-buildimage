@@ -1,13 +1,13 @@
-From a57e4ce0dc4ac964d67e95b252ca1939c4bfba0f Mon Sep 17 00:00:00 2001
+From 2cd9a2640c41325ee679f5c9b5ec89da2ac4dd3b Mon Sep 17 00:00:00 2001
 From: liuh-80 <58683130+liuh-80@users.noreply.github.com>
 Date: Tue, 9 Nov 2021 16:34:12 +0800
-Subject: [PATCH 1/3] Fix audisp-tacplus build error.
+Subject: [PATCH] Fix audisp-tacplus build error.
 
 ---
  Makefile.am      |   2 +-
  audisp-tacplus.c | 241 ++++++++++++-----------------------------------
- debian/control   |   4 +-
- 3 files changed, 65 insertions(+), 182 deletions(-)
+ debian/control   |   6 +-
+ 3 files changed, 66 insertions(+), 183 deletions(-)
 
 diff --git a/Makefile.am b/Makefile.am
 index ad70ca0..b476e38 100644
@@ -370,7 +370,7 @@ index 42841e5..3d25ae9 100644
          free(loguser);
  }
 diff --git a/debian/control b/debian/control
-index 5306bd9..3152b45 100644
+index 5306bd9..28c7324 100644
 --- a/debian/control
 +++ b/debian/control
 @@ -2,9 +2,9 @@ Source: audisp-tacplus
@@ -385,6 +385,15 @@ index 5306bd9..3152b45 100644
  	dpkg-dev (>= 1.16.1~), git
  Standards-Version: 3.9.6
  Homepage: https://github.com/daveolson53/audisp_tacplus
+@@ -12,7 +12,7 @@ Homepage: https://github.com/daveolson53/audisp_tacplus
+ Package: audisp-tacplus
+ Architecture: any
+ Depends: ${shlibs:Depends}, ${misc:Depends}, libpam-tacplus, libtac2 (>= 1.4.1~),
+-	libtacplus-map1, libauparse0, libaudit1, auditd
++	libauparse0, libaudit1, auditd
+ Description: audisp module for TACACS+ accounting
+ 	This audisp module is an audisp auditd plugin. It is designed to do TACACS+
+     accounting for commands run by TACACS+ authenticated sessions.
 -- 
 2.17.1.windows.2
 
