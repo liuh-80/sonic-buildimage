@@ -272,7 +272,7 @@ index 42841e5..3d25ae9 100644
 +    }
 +    
 +    memset(username, 0, new_buffer_size);
-+    strncpy(username, pws->pw_name, new_buffer_size);
++    strncpy(username, pws->pw_name, new_buffer_size-1);
 +    return username;
  }
  
@@ -336,7 +336,7 @@ index 42841e5..3d25ae9 100644
 +    memset(host, 0, sizeof(host));
 +    if (gethostname(host, sizeof(host)) != 0)
 +    {
-+        strncpy(host, unknown_hostname, sizeof(host));
++        strncpy(host, unknown_hostname, sizeof(host)-1);
 +    }
  
      if(get_field(au, "syscall"))
