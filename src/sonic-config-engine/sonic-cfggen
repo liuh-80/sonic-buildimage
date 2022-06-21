@@ -407,7 +407,7 @@ def main():
         for template_file, dest_file in args.template:
             template = env.get_template(os.path.basename(template_file))
             template_data = template.render(data)
-            if dest_file == "config-db":
+            if dest_file == "config-db" or dest_file == "static-config-db":
                 deep_update(data, FormatConverter.to_deserialized(json.loads(template_data)))
             else:
                 with smart_open(dest_file, 'w') as df:
