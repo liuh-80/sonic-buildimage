@@ -445,7 +445,11 @@ def main():
             SonicDBConfig.load_sonic_global_db_config(namespace=args.namespace)
             configdb = ConfigDBPipeConnector(use_unix_socket_path=True, namespace=args.namespace, **db_kwargs)
 
-        configdb.connect(False)
+        if dest_file == "static-config-db":
+            configdb.db_connect("STATIC_CONFIG_DB")
+        else:
+            configdb.connect(False)
+
         configdb.mod_config(FormatConverter.output_to_db(data))
 
     if args.print_data:
