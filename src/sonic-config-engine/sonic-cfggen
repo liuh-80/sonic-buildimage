@@ -274,6 +274,8 @@ def main():
     group.add_argument("--print-data", help="print all data", action='store_true')
     group.add_argument("-w", "--write-to-db", help="write config into configdb", action='store_true')
     group.add_argument("-K", "--key", help="Lookup for a specific key")
+    group.add_argument("--remove-table", help="Table filter, remove tables from result")
+    group.add_argument("--keep-table", help="Table filter, keep tables from result")
     args = parser.parse_args()
 
     platform = device_info.get_platform()
@@ -416,6 +418,19 @@ def main():
     if args.var is not None:
         template = jinja2.Template('{{' + args.var + '}}')
         print(template.render(data))
+        
+    # POC: remove data with table filter
+    if args.remove_table:
+        for table in args.remove_table:
+            if table in data.keys():
+                del data[table]
+
+    # POC: keep data with table filter
+    if args.keep_table:
+        tables = data.keys()
+        for table in tables:
+            if table not in args.keep_table:
+                del data[table]
 
     if args.var_json is not None and args.var_json in data:
         if args.key is not None:
