@@ -1797,6 +1797,8 @@ def parse_xml(filename, platform=None, port_config_file=None, asic_name=None, hw
         alias = port.get('alias', port_name)
         # generate default 100G FEC only if FECDisabled is not true and 'fec' is not defined in port_config.ini
         # Note: FECDisabled only be effective on 100G port right now
+        # [HUA] test code for fec == default
+        port['fec'] = 'none'
         if linkmetas.get(alias, {}).get('FECDisabled', '').lower() == 'true':
             port['fec'] = 'none'
         elif not port.get('fec') and port.get('speed') == '100000':
@@ -1804,6 +1806,8 @@ def parse_xml(filename, platform=None, port_config_file=None, asic_name=None, hw
 
         # If AutoNegotiation is available in the minigraph, we override any value we may have received from port_config.ini
         autoneg = linkmetas.get(alias, {}).get('AutoNegotiation')
+        # [HUA] test code for autoneg == off
+        port['autoneg'] = 'off'
         if autoneg:
             port['autoneg'] = 'on' if autoneg.lower() == 'true' else 'off'
 
@@ -1838,13 +1842,13 @@ def parse_xml(filename, platform=None, port_config_file=None, asic_name=None, hw
                 port['description'] = port.get('alias', port_name)
 
     # set default port MTU as 9100 and default TPID 0x8100
-    for port in ports.values():
-        port['mtu'] = '9100'
-        port['tpid'] = '0x8100'
+    #for port in ports.values():
+    #    port['mtu'] = '9100'
+    #    port['tpid'] = '0x8100'
 
     # asymmetric PFC is disabled by default
-    for port in ports.values():
-        port['pfc_asym'] = 'off'
+    #for port in ports.values():
+    #    port['pfc_asym'] = 'off'
 
     # set physical port default admin status up
     for port in phyport_intfs:

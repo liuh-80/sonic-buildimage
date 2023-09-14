@@ -35,6 +35,7 @@ from sonic_py_common.multi_asic import get_asic_id_from_name, get_asic_device_id
 from sonic_py_common import device_info
 from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig, ConfigDBPipeConnector
 
+profile_tables = ['PORT']
 
 PY3x = sys.version_info >= (3, 0)
 
@@ -252,6 +253,22 @@ def _get_jinja2_env(paths):
 
     return env
 
+def filter_profile_tables(data, generate_profile):
+    if generate_profile:
+        # remove all none profile tables
+        tables = list(data.keys())
+        for table in tables:
+            if table not in profile_tables:
+                del data[table]
+    # TODO: Enable following code after profile config related code migrated.
+    '''
+    else:
+        # remove profile tables
+        for table in profile_tables:
+            if table in data.keys():
+                del data[table]
+    '''
+
 def main():
     parser=argparse.ArgumentParser(description="Render configuration file from minigraph data and jinja2 template.")
     group = parser.add_mutually_exclusive_group()
@@ -268,6 +285,7 @@ def main():
     parser.add_argument("-d", "--from-db", help="read config from configdb", action='store_true')
     parser.add_argument("-H", "--platform-info", help="read platform and hardware info", action='store_true')
     parser.add_argument("-s", "--redis-unix-sock-file", help="unix sock file for redis connection")
+    parser.add_argument("-P", "--profile-config", help="generate profile config", action='store_true')
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-t", "--template", help="render the data with the template file", action="append", default=[],
                        type=lambda opt_value: tuple(opt_value.split(',')) if ',' in opt_value else (opt_value, sys.stdout))
@@ -275,6 +293,7 @@ def main():
     group.add_argument("-v", "--var", help="print the value of a variable, support jinja2 expression")
     group.add_argument("--var-json", help="print the value of a variable, in json format")
     group.add_argument("--preset", help="generate sample configuration from a preset template", choices=get_available_config())
+    parser.add_argument("-F", "--full-config", help="generate full config", action='store_true')
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--print-data", help="print all data", action='store_true')
     group.add_argument("-w", "--write-to-db", help="write config into configdb", action='store_true')
@@ -313,6 +332,8 @@ def main():
         if ports is None:
             print('Failed to get port config', file=sys.stderr)
             sys.exit(1)
+
+        # POC: generate port data
         deep_update(data, {'PORT': ports})
 
         brkout_table = get_breakout_mode(hwsku, platform, args.port_config)
@@ -365,8 +386,25 @@ def main():
             SonicDBConfig.load_sonic_global_db_config(namespace=args.namespace)
             configdb = ConfigDBPipeConnector(use_unix_socket_path=use_unix_sock, namespace=args.namespace, **db_kwargs)
 
-        configdb.connect()
+        if args.profile_config:
+            configdb.db_connect("PROFILE_DB")
+        else:
+            configdb.connect()
+
         deep_update(data, FormatConverter.db_to_output(configdb.get_config()))
+
+        if args.full_config:
+            # when show full config, load config from config DB and merge data load with profile DB in above code
+            use_unix_sock = True if os.getuid() == 0 else False
+            if args.namespace is None:
+                configdb = ConfigDBPipeConnector(use_unix_socket_path=use_unix_sock, **db_kwargs)
+            else:
+                SonicDBConfig.load_sonic_global_db_config(namespace=args.namespace)
+                configdb = ConfigDBPipeConnector(use_unix_socket_path=use_unix_sock, namespace=args.namespace, **db_kwargs)
+
+            configdb.connect()
+            deep_update(data, FormatConverter.db_to_output(configdb.get_config()))
+
 
 
     # the minigraph file must be provided to get the mac address for backend asics
@@ -414,7 +452,7 @@ def main():
         for template_file, dest_file in args.template:
             template = env.get_template(os.path.basename(template_file))
             template_data = template.render(data)
-            if dest_file == "config-db":
+            if dest_file == "config-db" or dest_file == "profile-db":
                 deep_update(data, FormatConverter.to_deserialized(json.loads(template_data)))
             else:
                 with smart_open(dest_file, 'w') as df:
@@ -423,6 +461,8 @@ def main():
     if args.var is not None:
         template = jinja2.Template('{{' + args.var + '}}')
         print(template.render(data))
+
+    filter_profile_tables(data, args.profile_config)
 
     if args.var_json is not None and args.var_json in data:
         if args.key is not None:
@@ -437,7 +477,11 @@ def main():
             SonicDBConfig.load_sonic_global_db_config(namespace=args.namespace)
             configdb = ConfigDBPipeConnector(use_unix_socket_path=True, namespace=args.namespace, **db_kwargs)
 
-        configdb.connect(False)
+        if args.profile_config:
+            configdb.db_connect("PROFILE_DB")
+        else:
+            configdb.connect(False)
+
         configdb.mod_config(FormatConverter.output_to_db(data))
 
     if args.print_data:

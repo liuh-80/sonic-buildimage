@@ -119,6 +119,7 @@ module sonic-port{
 					type uint16 {
 						range 68..9216;
 					}
+					default "9100";
 				}
 
 				leaf subport {
@@ -159,6 +160,7 @@ module sonic-port{
 					type string {
 						pattern "on|off";
 					}
+					default "off";
 				}
 
 				leaf tpid {
