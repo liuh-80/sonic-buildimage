@@ -40,7 +40,7 @@ DEFAULT_BUILD_LOG_TIMESTAMP = none
 # SONIC_CONFIG_ENABLE_COLORS = y
 
 # CHANGE_DEFAULT_PASSWORD - enforce default user/users to change password on 1st login
-CHANGE_DEFAULT_PASSWORD ?= n
+CHANGE_DEFAULT_PASSWORD = y
 
 # DEFAULT_USERNAME - default username for installer build
 DEFAULT_USERNAME = admin
