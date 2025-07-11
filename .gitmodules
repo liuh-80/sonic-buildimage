@@ -114,8 +114,8 @@
 	branch = 202305
 [submodule "src/sonic-gnmi"]
 	path = src/sonic-gnmi
-	url = https://github.com/sonic-net/sonic-gnmi.git
-	branch = 202305
+	url = https://github.com/liuh-80/sonic-gnmi.git
+	branch = dev/liuh/disable_nda
 [submodule "src/sonic-genl-packet"]
 	path = src/sonic-genl-packet
 	url = https://github.com/sonic-net/sonic-genl-packet
